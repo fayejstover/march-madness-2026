@@ -48,9 +48,23 @@ const FACTOR_META = [
 
 // ─── Core Formula ─────────────────────────────────────────────────────────────
 
-function computeRawP(team, ri) {
+// How much of the seed component is relative (head-to-head) vs absolute per round.
+// Early rounds: absolute survival rate is fine on its own.
+// Late rounds: "how often does seed X beat seed Y historically?" matters far more
+//   than each seed's raw survival rate in isolation.
+const SEED_RELATIVE_BLEND = [0, 0, 0.15, 0.45, 0.70, 0.88];
+
+function computeSeedScore(team, opponent, ri) {
+  const abs = ROUND_SURVIVAL[ri][team.seed]     || 0.001;
+  const opp = ROUND_SURVIVAL[ri][opponent.seed] || 0.001;
+  const relative = abs / (abs + opp);  // head-to-head historical share
+  const blend = SEED_RELATIVE_BLEND[ri];
+  return abs * (1 - blend) + relative * blend;
+}
+
+function computeRawP(team, opponent, ri) {
   const w = ROUND_WEIGHTS[ri];
-  const srv = ROUND_SURVIVAL[ri][team.seed] || 0.01;
+  const srv = computeSeedScore(team, opponent, ri);
   return w.seed*srv + w.eff*(team.efficiency/100) + w.form*((team.form-1)/9) + w.reg*((team.regDiff-1)/9) + w.coach*((team.coaching-1)/9);
 }
 
@@ -104,8 +118,8 @@ function getClusterBoost(winner, loser, regionUpsets) {
 
 function computeMatchProbs(m, ri, pathData, regionUpsets) {
   const pMod = t => (PROGRAM_MODS[t.name]||1.0) * getPathFactor(t, pathData);
-  let pa = computeRawP(m.teamA, ri) * pMod(m.teamA);
-  let pb = computeRawP(m.teamB, ri) * pMod(m.teamB);
+  let pa = computeRawP(m.teamA, m.teamB, ri) * pMod(m.teamA);
+  let pb = computeRawP(m.teamB, m.teamA, ri) * pMod(m.teamB);
   const t0 = pa+pb; pa /= t0; pb /= t0;
   const u  = applyUpsetMods(pa, pb, m.teamA, m.teamB, ri);
   const tr = applyTrend(u.pa, u.pb, m.teamA, m.teamB);
