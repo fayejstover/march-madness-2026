@@ -10,10 +10,6 @@ const ROUND_WEIGHTS = [
   { seed:0.07, eff:0.38, form:0.26, reg:0.05, coach:0.24 },
 ];
 
-// Round-specific seed survival rates from historical data.
-// Sweet 16: #1=68%, #2=58%, #3=47%, #4=38%, #5=28%, #6=25%, #7=22%, #8/#9=20%, #10-16<15%
-// Elite 8:  #1=58%, #2=50%, #3-4=40-45%
-// Championship: #1=20-25%, #2 nearly 0 last 20 yrs, #3-6 occasional
 const ROUND_SURVIVAL = {
   0: {1:.985,2:.935,3:.855,4:.795,5:.655,6:.630,7:.610,8:.515,9:.485,10:.390,11:.370,12:.345,13:.205,14:.145,15:.065,16:.015},
   1: {1:.875,2:.720,3:.640,4:.560,5:.430,6:.380,7:.340,8:.280,9:.260,10:.220,11:.240,12:.200,13:.100,14:.080,15:.040,16:.010},
@@ -23,9 +19,6 @@ const ROUND_SURVIVAL = {
   5: {1:.225,2:.028,3:.125,4:.095,5:.072,6:.060,7:.050,8:.040,9:.030,10:.024,11:.018,12:.014,13:.005,14:.003,15:.001,16:.000},
 };
 
-// Upset modifiers: boost the higher-numbered (weaker) seed in specific matchups.
-// 12-5 upsets most common in R64/R32; 6-11 and 7-10 more evenly distributed in R32.
-// 12-seeds fizzle post-Sweet-16 (modifier < 1).
 const UPSET_MODS = {
   0: {'12v5':1.38,'11v6':1.28,'13v4':1.22,'10v7':1.15,'9v8':1.10,'15v2':1.08},
   1: {'12v5':1.08,'11v6':1.38,'10v7':1.30,'9v8':1.22,'13v4':1.05},
@@ -34,7 +27,6 @@ const UPSET_MODS = {
   4: {}, 5: {},
 };
 
-// Programs that historically outperform seed expectations.
 const PROGRAM_MODS = {
   'Duke':1.06,'Kansas':1.05,'Connecticut':1.05,'Gonzaga':1.05,
   'Michigan St.':1.04,'Kentucky':1.04,'Florida':1.04,'Houston':1.04,
@@ -42,7 +34,6 @@ const PROGRAM_MODS = {
   'Illinois':1.02,'Virginia':1.02,'VCU':1.03,'Michigan':1.02,
 };
 
-// 2026 is slightly upset-heavy — boosts weaker seeds marginally.
 const SEASON_TREND = { upsetBoost: 1.05 };
 
 const BRACKET_PAIRS = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
@@ -80,8 +71,6 @@ function applyTrend(pa, pb, tA, tB) {
 }
 
 // ─── Path-Dependent Factors ────────────────────────────────────────────────────
-// Close-game penalty (-2% per close win), dominant-win boost (+1.5%),
-// cumulative fatigue after 3-4 games.
 
 function getPathFactor(team, pathData) {
   const d = pathData[`${team.region}-${team.seed}`];
@@ -104,7 +93,6 @@ function updatePathData(team, winProb, pathData) {
 }
 
 // ─── Region Upset Clustering ───────────────────────────────────────────────────
-// When a region has already produced upsets, further upsets get a small boost.
 
 function getClusterBoost(winner, loser, regionUpsets) {
   if (winner.seed <= loser.seed) return 1.0;
@@ -112,7 +100,26 @@ function getClusterBoost(winner, loser, regionUpsets) {
   return cnt === 0 ? 1.0 : cnt === 1 ? 1.04 : 1.07;
 }
 
-// ─── Main Simulation ──────────────────────────────────────────────────────────
+// ─── Shared probability kernel (used by both deterministic and MC) ─────────────
+
+function computeMatchProbs(m, ri, pathData, regionUpsets) {
+  const pMod = t => (PROGRAM_MODS[t.name]||1.0) * getPathFactor(t, pathData);
+  let pa = computeRawP(m.teamA, ri) * pMod(m.teamA);
+  let pb = computeRawP(m.teamB, ri) * pMod(m.teamB);
+  const t0 = pa+pb; pa /= t0; pb /= t0;
+  const u  = applyUpsetMods(pa, pb, m.teamA, m.teamB, ri);
+  const tr = applyTrend(u.pa, u.pb, m.teamA, m.teamB);
+  pa = tr.pa; pb = tr.pb;
+  const cA = getClusterBoost(m.teamA, m.teamB, regionUpsets);
+  const cB = getClusterBoost(m.teamB, m.teamA, regionUpsets);
+  if (cA !== 1.0 || cB !== 1.0) {
+    pa *= cA; pb *= cB;
+    const tc = pa+pb; pa /= tc; pb /= tc;
+  }
+  return { pa, pb };
+}
+
+// ─── Main Deterministic Simulation ────────────────────────────────────────────
 
 function simulate(lookup, picks) {
   picks = picks || {};
@@ -123,27 +130,10 @@ function simulate(lookup, picks) {
     const matchups = buildRoundMatchups(ri, allRounds, lookup);
 
     matchups.forEach((m, mi) => {
-      const pMod = t => (PROGRAM_MODS[t.name]||1.0) * getPathFactor(t, pathData);
-      let pa = computeRawP(m.teamA, ri) * pMod(m.teamA);
-      let pb = computeRawP(m.teamB, ri) * pMod(m.teamB);
-      const t0 = pa+pb; pa /= t0; pb /= t0;
-
-      const u  = applyUpsetMods(pa, pb, m.teamA, m.teamB, ri);
-      const tr = applyTrend(u.pa, u.pb, m.teamA, m.teamB);
-      pa = tr.pa; pb = tr.pb;
-
-      // Cluster boost
-      const cA = getClusterBoost(m.teamA, m.teamB, regionUpsets);
-      const cB = getClusterBoost(m.teamB, m.teamA, regionUpsets);
-      if (cA !== 1.0 || cB !== 1.0) {
-        pa *= cA; pb *= cB;
-        const tc = pa+pb; pa /= tc; pb /= tc;
-      }
-
+      const { pa, pb } = computeMatchProbs(m, ri, pathData, regionUpsets);
       m.probA = pa; m.probB = pb;
       m.algorithmWinner = pa >= pb ? m.teamA : m.teamB;
 
-      // User pick override
       const pick = picks[ri] && picks[ri][mi];
       if (pick && pick.region === m.teamA.region && pick.seed === m.teamA.seed) {
         m.winner = m.teamA; m.isManualPick = true;
@@ -194,11 +184,111 @@ function buildRoundMatchups(ri, prevRounds, lookup) {
   return ms;
 }
 
-// Returns chain of downstream (ri, mi) affected when pick at (roundIdx, matchIdx) changes.
-// Each parent match index = floor(child match index / 2) — uniform across all rounds.
 function getCascade(roundIdx, matchIdx) {
   const chain = [];
   let ri = roundIdx+1, mi = Math.floor(matchIdx/2);
   while (ri <= 5) { chain.push({ri,mi}); mi = Math.floor(mi/2); ri++; }
   return chain;
+}
+
+// ─── Monte Carlo Engine ────────────────────────────────────────────────────────
+// Runs N probabilistic bracket simulations.
+// Each matchup winner is drawn from Bernoulli(probA) instead of always taking
+// the higher-probability team.  Manual picks are still honored as forced outcomes.
+// Returns win-count distributions for every team × round combination.
+
+function simulateOnceMC(lookup, picks) {
+  picks = picks || {};
+  const pathData = {}, regionUpsets = {East:0,South:0,West:0,Midwest:0};
+  const allRounds = [];
+
+  for (let ri = 0; ri < 6; ri++) {
+    const matchups = buildRoundMatchups(ri, allRounds, lookup);
+
+    matchups.forEach((m, mi) => {
+      const { pa, pb } = computeMatchProbs(m, ri, pathData, regionUpsets);
+      m.probA = pa; m.probB = pb;
+
+      // Honor manual picks; otherwise draw probabilistically
+      const pick = picks[ri] && picks[ri][mi];
+      if (pick && pick.region === m.teamA.region && pick.seed === m.teamA.seed) {
+        m.winner = m.teamA;
+      } else if (pick && pick.region === m.teamB.region && pick.seed === m.teamB.seed) {
+        m.winner = m.teamB;
+      } else {
+        m.winner = Math.random() < pa ? m.teamA : m.teamB;  // ← the key difference
+      }
+
+      const winProb = m.winner === m.teamA ? pa : pb;
+      updatePathData(m.winner, winProb, pathData);
+      const loser = m.winner === m.teamA ? m.teamB : m.teamA;
+      if (m.winner.seed > loser.seed && m.winner.region === loser.region) {
+        regionUpsets[m.winner.region]++;
+      }
+    });
+
+    allRounds.push(matchups);
+  }
+
+  return { rounds: allRounds, champion: allRounds[5][0].winner };
+}
+
+/**
+ * simulateMonteCarlo(lookup, picks, N)
+ *
+ * Returns:
+ *   roundWins  – { 'East-1': [r0wins, r1wins, …, r5wins], … }
+ *                  How many of the N sims each team won each round.
+ *   champWins  – { 'East-1': count, … }
+ *   champList  – Top-10 teams sorted by championship probability, with 95% CI.
+ *   teamMap    – { 'East-1': teamObj, … }  (for lookup in the UI)
+ *   totalSims  – N
+ *   upsetFreq  – { roundIdx: upsetCount/N }  probability an upset occurs each round
+ */
+function simulateMonteCarlo(lookup, picks, N = 10000) {
+  const roundWins = {}, champWins = {}, teamMap = {};
+  // upsets[ri] = number of sims that produced ≥1 upset in round ri
+  const upsetRounds = [0,0,0,0,0,0];
+
+  ['East','South','West','Midwest'].forEach(region => {
+    Object.values(lookup[region]).forEach(team => {
+      const key = `${team.region}-${team.seed}`;
+      roundWins[key] = [0,0,0,0,0,0];
+      champWins[key] = 0;
+      teamMap[key] = team;
+    });
+  });
+
+  for (let i = 0; i < N; i++) {
+    const { rounds, champion } = simulateOnceMC(lookup, picks);
+
+    rounds.forEach((round, ri) => {
+      let hadUpset = false;
+      round.forEach(m => {
+        const key = `${m.winner.region}-${m.winner.seed}`;
+        if (roundWins[key]) roundWins[key][ri]++;
+        const loser = m.winner === m.teamA ? m.teamB : m.teamA;
+        if (m.winner.seed > loser.seed) hadUpset = true;
+      });
+      if (hadUpset) upsetRounds[ri]++;
+    });
+
+    const ck = `${champion.region}-${champion.seed}`;
+    if (champWins[ck] !== undefined) champWins[ck]++;
+  }
+
+  // Build sorted championship leaderboard with 95% confidence intervals
+  const champList = Object.entries(champWins)
+    .filter(([, w]) => w > 0)
+    .map(([key, wins]) => {
+      const pct = wins / N;
+      const ci  = 1.96 * Math.sqrt(pct * (1 - pct) / N);  // Wilson-ish approx
+      return { team: teamMap[key], wins, pct, ci };
+    })
+    .sort((a, b) => b.wins - a.wins)
+    .slice(0, 10);
+
+  const upsetFreq = upsetRounds.map(c => c / N);
+
+  return { roundWins, champWins, champList, teamMap, totalSims: N, upsetFreq };
 }
