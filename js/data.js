@@ -7,7 +7,8 @@
 
 const BRACKET_TEAMS = {
   East: [
-    {name:"Duke",            seed:1,  efficiency:95, form:9, coaching:9, regDiff:7},
+    // Duke survived a 16-seed scare: won 71-65 vs Siena. Form and efficiency docked.
+    {name:"Duke",            seed:1,  efficiency:88, form:5, coaching:9, regDiff:7},
     {name:"Siena",           seed:16, efficiency:28, form:3, coaching:3, regDiff:4},
     {name:"Ohio St.",        seed:8,  efficiency:68, form:6, coaching:6, regDiff:5},
     {name:"TCU",             seed:9,  efficiency:65, form:6, coaching:5, regDiff:5},
