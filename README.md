@@ -1,10 +1,9 @@
-# 🏀 March Madness Bracket Simulator — 2026 (v2)
+# March Madness Bracket Simulator — 2026 
 
-A probabilistic bracket simulator built around a round-adaptive **P_base v2 algorithm**. Weights shift each round as seed history becomes less predictive. Click any team row to pick your winner — click again to unselect. At the end, click **View full bracket** to see all 6 rounds laid out and print to PDF.
 
 ---
 
-## What's new in v2
+## New in v2
 
 | Feature | v1 | v2 |
 |---|---|---|
@@ -50,23 +49,6 @@ Round survival rates used in the seed component (historically derived):
 | #6–#9 | varies | varies | **20–25%** | ~15% | ~10% | ~5% |
 | #10–#16 | varies | varies | **<15%** | <10% | <6% | <2% |
 
----
-
-## Deploying
-
-### GitHub Pages (free, zero config)
-1. Push this repo to GitHub
-2. **Settings → Pages → Source:** `main` branch, `/ (root)`
-3. Live at `https://your-username.github.io/bracket-simulator`
-
-### Netlify (drop-and-go)
-Drag the entire folder onto [netlify.com](https://netlify.com). Done.
-
-```bash
-# Or via CLI:
-npm install -g netlify-cli
-netlify deploy --dir . --prod
-```
 
 ### Vercel
 ```bash
@@ -74,19 +56,6 @@ npm install -g vercel
 cd bracket-simulator
 vercel --prod
 ```
-
-### Local
-```bash
-# Python 3
-python -m http.server 8080
-
-# Node.js
-npx serve .
-
-# Then open http://localhost:8080
-```
-
-No build step, no dependencies — pure HTML/CSS/JS.
 
 ---
 
