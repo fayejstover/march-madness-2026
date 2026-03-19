@@ -24,6 +24,8 @@
           <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           GitHub
         </a>
+        <a class="hdr-link" href="#algorithm" onclick="event.preventDefault();document.getElementById('algorithm').scrollIntoView({behavior:'smooth'})">
+          Algorithm
         </a>
       </div>
     </div>
@@ -37,6 +39,9 @@
     <!-- ── Left column: bracket ──────────────────────────────────────────── -->
     <div>
       <div class="panel" style="margin-bottom:1.25rem">
+
+        <!-- ▶ Sim-mode toggle (Deterministic / Monte Carlo) -->
+        <div id="sim-control"></div>
 
         <!-- Round tabs -->
         <div id="round-tabs"></div>
@@ -63,6 +68,43 @@
 
       </div><!-- /panel -->
 
+      <!-- Algorithm reference -->
+      <div class="panel" id="algorithm">
+        <div class="panel-hdr"><span class="panel-title">Algorithm Reference — v2</span></div>
+        <div class="panel-body">
+          <div class="formula-code">
+<span class="cmt">// Round-adaptive P_base — weights shift each round</span>
+P_base = <span class="kw">weighted_avg</span>(
+  RoundSurvival[seed][round],  <span class="cmt">// 38% → 7%  (R64 → Champ)</span>
+  EfficiencyRating / 100,      <span class="cmt">// 20% → 38%</span>
+  RecentForm / 10,             <span class="cmt">// 15% → 26%</span>
+  RegionalDifficulty / 10,     <span class="cmt">// 10% → 5%</span>
+  CoachingFactor / 10          <span class="cmt">// 17% → 24%</span>
+)
+
+P_base *= ProgramModifier      <span class="cmt">// Elite programs: +2–6%</span>
+P_base *= PathFactor           <span class="cmt">// Close wins: -2%; blowouts: +1.5%</span>
+P_base *= ClusterBoost         <span class="cmt">// Upset clustering: +4–7%</span>
+P_base *= SeasonTrend          <span class="cmt">// 2026 upset-heavy: weaker seeds +5%</span>
+
+WinProb(A vs B) = P_base(A) / (P_base(A) + P_base(B))
+
+<span class="cmt">// Monte Carlo: N probabilistic bracket draws</span>
+Winner = <span class="kw">Bernoulli</span>(WinProb(A vs B))  <span class="cmt">// vs argmax in deterministic</span>
+          </div>
+          <p class="algo-note">
+            v2 improvements over v1:
+          </p>
+          <ul class="algo-note">
+            <li><strong>Round survival rates</strong> replace flat seed history — #2 seeds drop to near-zero championship probability matching 20-yr historical data</li>
+            <li><strong>Upset timing modifiers</strong> — 12-5 upsets boosted in R64/R32 and penalized post-Sweet 16; 6-11 and 7-10 upsets peak in R32</li>
+            <li><strong>Program modifiers</strong> — Duke (+6%), Kansas/UConn/Gonzaga (+5%), and 8 other elite programs baked in</li>
+            <li><strong>Path dependency</strong> — close-game penalty (−2% per win), blowout boost (+1.5%), cumulative fatigue after 3–4 games</li>
+            <li><strong>Upset clustering</strong> — each upset in a region raises the next upset's probability by 4–7%</li>
+            <li><strong>Monte Carlo mode</strong> — N=1K–10K probabilistic bracket draws surface championship probability distributions and 95% confidence intervals</li>
+          </ul>
+        </div>
+      </div>
     </div><!-- /left col -->
 
     <!-- ── Right sidebar ─────────────────────────────────────────────────── -->
@@ -76,7 +118,7 @@
 
       <!-- Champion projection -->
       <div class="panel">
-        <div class="panel-hdr"><span class="panel-title">Projected Champion</span></div>
+        <div class="panel-hdr"><span class="panel-title" id="champ-panel-title">Projected Champion</span></div>
         <div class="panel-body" id="champion-panel"></div>
       </div>
 
@@ -89,7 +131,6 @@
 <footer class="site-footer">
   <div class="container">
     2026 March Madness Bracket Simulator. Just for fun.
-    <a href="https://github.com/your-username/bracket-simulator" target="_blank" rel="noopener"></a>
   </div>
 </footer>
 
