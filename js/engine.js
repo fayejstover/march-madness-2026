@@ -7,7 +7,7 @@ const ROUND_WEIGHTS = [
   { seed:0.22, eff:0.34, form:0.18, reg:0.13, coach:0.13 },
   { seed:0.16, eff:0.37, form:0.20, reg:0.13, coach:0.14 },
   { seed:0.12, eff:0.39, form:0.21, reg:0.10, coach:0.18 },
-  { seed:0.07, eff:0.38, form:0.26, reg:0.05, coach:0.24 },
+  { seed:0.22, eff:0.30, form:0.22, reg:0.04, coach:0.22 },
 ];
 
 const ROUND_SURVIVAL = {
